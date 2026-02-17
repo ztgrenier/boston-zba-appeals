@@ -1,0 +1,100 @@
+import json
+import csv
+import io
+import boto3
+from datetime import datetime, timedelta
+
+S3_BUCKET = "boston-zba-appeals"
+S3_KEY = "boston-zba-appeals.csv"
+
+DATE_COLUMNS = {
+    "received_date",
+    "hearing_date",
+    "final_decision_date",
+    "closed_date"
+}
+
+DECISION_COLUMN = "decision"
+
+s3 = boto3.client("s3")
+
+def parse_date(date_str):
+    """
+    Safely parse a date string into a datetime object.
+    Returns None if blank or invalid.
+    """
+    if not date_str or date_str.strip() == "":
+        return None
+
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(date_str.strip(), fmt)
+        except ValueError:
+            continue
+
+    return None
+
+def lambda_handler(event, context):
+    try:
+        # Download CSV
+        response = s3.get_object(Bucket=S3_BUCKET, Key=S3_KEY)
+        csv_content = response["Body"].read().decode("utf-8")
+
+        input_buffer = io.StringIO(csv_content)
+        reader = csv.DictReader(input_buffer)
+        fieldnames = reader.fieldnames
+
+        today = datetime.today()
+        two_years_ago = today - timedelta(days=2 * 365)
+
+        filtered_rows = []
+        removed_count = 0
+
+        for row in reader:
+            # Check date conditions
+            remove_row = False
+            for col in DATE_COLUMNS:
+                date_value = parse_date(row.get(col))
+                if date_value and date_value < two_years_ago:
+                    remove_row = True
+                    break
+
+            if remove_row:
+                removed_count += 1
+                continue
+
+            # Normalize decision value
+            if row.get(DECISION_COLUMN) == "AppProv":
+                row[DECISION_COLUMN] = "Approved"
+
+            filtered_rows.append(row)
+
+        # Write cleaned CSV back to S3 (overwrite)
+        output_buffer = io.StringIO()
+        writer = csv.DictWriter(output_buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(filtered_rows)
+
+        s3.put_object(
+            Bucket=S3_BUCKET,
+            Key=S3_KEY,
+            Body=output_buffer.getvalue().encode("utf-8"),
+            ContentType="text/csv"
+        )
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "CSV filtered and updated successfully",
+                "rows_removed": removed_count,
+                "rows_remaining": len(filtered_rows),
+                "bucket": S3_BUCKET,
+                "key": S3_KEY
+            })
+        }
+
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
