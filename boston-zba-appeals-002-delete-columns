@@ -4,7 +4,7 @@ import io
 import boto3
 
 S3_BUCKET = "boston-zba-appeals"
-S3_KEY = "boston-zba-appeals.csv"
+S3_KEY = "Boston-ZBA-Appeals.csv"
 
 COLUMNS_TO_REMOVE = {"_id", "zip", "ward"}
 
