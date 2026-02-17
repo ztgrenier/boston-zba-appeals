@@ -8,8 +8,8 @@ import boto3
 RESOURCE_ID = "0f0fa8c2-87ba-45d6-a876-0d177dd02512"
 CKAN_URL = "https://data.boston.gov/api/3/action/datastore_search"
 
-S3_BUCKET = "boston-development"
-S3_KEY = "Boston-Development.csv"
+S3_BUCKET = "boston-zba-appeals"
+S3_KEY = "Boston-ZBA-Appeals.csv"
 
 s3 = boto3.client("s3")
 
@@ -71,13 +71,6 @@ def lambda_handler(event, context):
                 "bucket": S3_BUCKET,
                 "key": S3_KEY
             })
-        }
-
-    except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
         }
 
     except Exception as e:
